@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase =
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        ? createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        )
+        : null;
 
 export default function Acceso() {
     const router = useRouter();
@@ -17,26 +25,42 @@ export default function Acceso() {
         setCargando(true);
         setMensaje("");
 
-        if (modo === "registro") {
-            const { error } = await supabase.auth.signUp({ email, password });
-            setMensaje(
-                error
-                    ? error.message
-                    : "Cuenta creada. Revisa tu email para confirmarla y luego inicia sesión."
-            );
-        } else {
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-            if (error) {
-                setMensaje(error.message);
-            } else {
-                router.push("/");
-                router.refresh();
-            }
+        if (!supabase) {
+            setMensaje("Falta la configuración de Supabase en las variables de entorno.");
+            setCargando(false);
+            return;
         }
-        setCargando(false);
+
+        try {
+            if (modo === "registro") {
+                const { error } = await supabase.auth.signUp({ email, password });
+                setMensaje(
+                    error
+                        ? error.message
+                        : "Cuenta creada. Revisa tu email para confirmarla y luego inicia sesión."
+                );
+            } else {
+                const { error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+
+                if (error) {
+                    setMensaje(error.message);
+                } else {
+                    router.push("/");
+                    router.refresh();
+                }
+            }
+        } catch (error) {
+            const message =
+                error && typeof error === "object" && "message" in error
+                    ? String((error as { message?: string }).message)
+                    : "No se pudo completar la operación.";
+            setMensaje(message);
+        } finally {
+            setCargando(false);
+        }
     }
 
     return (
